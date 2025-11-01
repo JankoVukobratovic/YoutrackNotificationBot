@@ -1,8 +1,9 @@
-package org.jankos
-
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.logging.LogLevel
+import org.jankos.clients.TelegramBotClient
+import clients.YouTrackClient
+import config.ConfigurationLoader
 
 fun main() {
     println("Starting YouTrack Telegram Bot")
@@ -17,7 +18,7 @@ fun main() {
 
     val youTrackClient = YouTrackClient(config)
 
-    val youTrackBotLogic = TelegramBot(youTrackClient, config)
+    val youTrackBotLogic = TelegramBotClient(youTrackClient, config)
 
     val bot = bot {
         token = config.telegram.botToken

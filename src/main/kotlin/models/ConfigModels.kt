@@ -1,4 +1,4 @@
-package org.jankos
+package models
 import kotlinx.serialization.Serializable
 
 @Serializable

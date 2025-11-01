@@ -1,6 +1,7 @@
-package org.jankos
+package config
 
 import kotlinx.serialization.json.Json
+import models.AppConfig
 import java.io.InputStreamReader
 
 object ConfigurationLoader {

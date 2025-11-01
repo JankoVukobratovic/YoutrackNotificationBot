@@ -1,7 +1,8 @@
-package org.jankos
+package models
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import org.jankos.YouTrackValueAsListSerializer
+
 
 @Serializable
 data class YouTrackIssue(
@@ -14,7 +15,8 @@ data class YouTrackIssue(
 @Serializable
 data class CustomField(
     val name: String,
-    val value: JsonElement? = null
+    @Serializable(with = YouTrackValueAsListSerializer::class)
+    val value: List<CustomFieldValue>? = null
 )
 
 @Serializable
