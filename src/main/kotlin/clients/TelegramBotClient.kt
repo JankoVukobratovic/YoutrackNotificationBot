@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import clients.YouTrackClient
+import com.github.kotlintelegrambot.Bot
+import manager.SubscriptionManager
 import models.AppConfig
 import models.YouTrackActivity
 import models.YouTrackIssue
@@ -28,15 +30,70 @@ class TelegramBotClient(
 
     fun setupDispatchers(dispatcher: Dispatcher) {
         dispatcher.command("start", handleStartCommand())
+        dispatcher.command("help", handleHelpCommand())
         dispatcher.command("issues", handleIssuesCommand())
         dispatcher.command("activities", handleActivitiesCommand())
+        dispatcher.command("subscribe", handleSubscribeCommand())
+        dispatcher.command("unsubscribe", handleUnsubscribeCommand())
+        dispatcher.command("pingsubs", handlePingCommand())
+    }
+
+    private fun handleHelpCommand(): HandleCommand = {
+        bot.sendMessage(
+            chatId = ChatId.fromId(message.chat.id),
+            text = """/start - A welcome message
+                    /issues - Last 24 hours of issues activity
+                    /activities - Notifications from the last 24 hours
+                    /subscribe - Subscribe this chat to receive regular notifications
+                    /unsubscribe - Unsubscribe this chat from regular notifications"""
+        )
+    }
+
+    // JUST A TEST :)
+    private fun handlePingCommand(): HandleCommand = {
+        val pingMessage = "🏓Ping pong!🏓 From: ${message.chat.title} \nWith id: ${message.chat.id}"
+
+        sendToAll(bot, pingMessage, SubscriptionManager.subscriptions)
+    }
+
+    private fun sendToAll(bot: Bot, messageText: String, chatIds: Iterable<Long>){
+        for (id in chatIds){
+            bot.sendMessage(
+                chatId = ChatId.fromId(id),
+                text = messageText
+            )
+        }
+    }
+
+    private fun handleSubscribeCommand(): HandleCommand = {
+        val messageText: String = if (SubscriptionManager.add(message.chat.id)) {
+            "✅Chat subscribed!"
+        } else {
+            "⁉️Already subscribed!"
+        }
+        bot.sendMessage(
+            chatId = ChatId.fromId(message.chat.id),
+            text = messageText
+        )
+    }
+
+    private fun handleUnsubscribeCommand(): HandleCommand = {
+        val messageText: String = if(SubscriptionManager.remove(message.chat.id)){
+            "✅Chat removed from subscription list!"
+        } else {
+            "⁉️Chat wasn't even subscribed :/"
+        }
+        bot.sendMessage(
+            chatId = ChatId.fromId(message.chat.id),
+            text = messageText
+        )
     }
 
     private fun handleStartCommand(): HandleCommand = {
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
             text = "Hello! I track YouTrack issues for $projectShortName. " +
-                    "Try /updates for the last 24 hours of activity."
+                    "Try /help for a list of commands."
         )
     }
 
@@ -85,12 +142,12 @@ class TelegramBotClient(
 
             val notificationText = when (activity.category.id) {
                 "IssueCreatedCategory" -> {
-                    "*${author}* created issue ${issueLink}: _${summary}_"
+                    "*${author}* created issue ${issueLink}: \n_${summary}_"
                 }
 
                 "IssueCommentCategory" -> {
                     val commentText = activity.text?.take(80)?.replace("\n", " ") ?: ""
-                    "*${author}* commented on ${issueLink}: _\"${commentText}\"_..."
+                    "*${author}* commented on ${issueLink}: \n_\"${commentText}\"_..."
                 }
 
                 "IssueAttachmentCategory" -> {
@@ -105,14 +162,17 @@ class TelegramBotClient(
 
                     when {
                         addedValue != null && removedValue != null -> {
-                            "*${author}* changed *${fieldName}* on ${issueLink} from *${removedValue}* to *${addedValue}*."
+                            "*${author}* changed *${fieldName}* on ${issueLink} \nfrom *${removedValue}* to *${addedValue}*."
                         }
+
                         addedValue != null && removedValue == null -> {
                             "*${author}* added *${addedValue}* to *${fieldName}* on ${issueLink}."
                         }
+
                         addedValue == null && removedValue != null -> {
                             "*${author}* removed *${removedValue}* from *${fieldName}* on ${issueLink}."
                         }
+
                         else -> "*${author}* updated ${issueLink}."
                     }
                 }
@@ -125,7 +185,7 @@ class TelegramBotClient(
             } else {
                 null
             }
-        }.joinToString(separator = "\n")
+        }.joinToString(separator = "\n\n\n")
 
         return if (notifications.isNotEmpty()) {
             "📢 *Recent Activities for ${projectShortName}*:\n\n$notifications"

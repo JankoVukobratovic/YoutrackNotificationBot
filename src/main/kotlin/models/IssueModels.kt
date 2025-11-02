@@ -1,7 +1,7 @@
 package models
 
 import kotlinx.serialization.Serializable
-import org.jankos.YouTrackValueAsListSerializer
+import serializers.YouTrackValueAsListSerializer
 
 
 @Serializable

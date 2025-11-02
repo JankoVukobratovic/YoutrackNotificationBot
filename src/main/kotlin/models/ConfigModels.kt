@@ -1,11 +1,19 @@
 package models
+
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class AppConfig(
     val telegram: TelegramConfig,
     val youtrack: YouTrackConfig,
-    val project: ProjectConfig
+    val project: ProjectConfig,
+    val selfConfig: SelfConfig
+)
+
+@Serializable
+data class SelfConfig(
+    val subscriptionFile: String,
+    val updateIntervalMinutes: Int
 )
 
 @Serializable

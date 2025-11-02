@@ -1,0 +1,17 @@
+{
+  "telegram": {
+    "botToken": "bottoken",
+    "targetChatId": -1
+  },
+  "youtrack": {
+    "baseUrl": "https://test.youtrack.cloud/api",
+    "apiToken": "perm-apitoken"
+  },
+  "project": {
+    "shortName": "TEST"
+  },
+  "selfConfig": {
+    "subscriptionFile" : "savefile path",
+    "updateIntervalMinutes": 5
+  }
+}
