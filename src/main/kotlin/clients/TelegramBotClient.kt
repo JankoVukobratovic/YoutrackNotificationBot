@@ -12,10 +12,12 @@ import com.github.kotlintelegrambot.logging.LogLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import services.SubscriptionService
 import models.AppConfig
 import serializers.MessageFormatter
 import services.IntervalService
+import services.SubscriptionService
+import java.time.Duration
+import java.time.Instant
 
 class TelegramBotClient(
     private val youTrackClient: YouTrackClient,
@@ -59,10 +61,16 @@ class TelegramBotClient(
     }
 
     // JUST A TEST :)
-    private fun handlePingCommand(): HandleCommand = {
+    fun handlePingCommand(): HandleCommand = {
         val pingMessage = "🏓Ping pong!🏓 From: ${message.chat.title} \nWith id: ${message.chat.id}"
 
-        sendToAll(bot, pingMessage, SubscriptionService.getAllSubscriptions())
+        sendToAll(botInstance, pingMessage, SubscriptionService.getAllSubscriptions())
+    }
+
+    fun pingAll(){
+        val pingMessage = "🏓Ping pong!🏓 \nFrom scheduler!"
+        sendToAll(botInstance, pingMessage, SubscriptionService.getAllSubscriptions())
+
     }
 
     private fun sendToAll(bot: Bot, messageText: String, chatIds: Iterable<Long>) {
@@ -106,7 +114,7 @@ class TelegramBotClient(
         )
     }
 
-    private fun handleActivitiesCommand(period: String = "1d"): HandleCommand = {
+    private fun handleActivitiesCommand(period: Duration = Duration.ofDays(1)): HandleCommand = {
         CoroutineScope(Dispatchers.IO).launch {
             val chatId = ChatId.fromId(message.chat.id)
 
@@ -117,7 +125,7 @@ class TelegramBotClient(
             )
 
             try {
-                val activities = youTrackClient.getActivities(period)
+                val activities = youTrackClient.getActivities(Instant.now().toEpochMilli() - period.toMillis())
                 val responseMessage = MessageFormatter.formatActivityList(activities)
 
                 bot.sendMessage(
@@ -148,14 +156,19 @@ class TelegramBotClient(
         }
     }
 
-    public fun handleActivitiesNews() {
+    fun handleActivitiesNews() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val activities = youTrackClient.getActivities(IntervalService.getSinceLastAsString())
+                val activities = youTrackClient.getActivities(IntervalService.getLastCheckTime().toEpochMilli())
+                if(activities.isEmpty()){
+                    println("no new activities")
+                    return@launch
+                }
                 val messageToSend = MessageFormatter.formatActivityList(activities)
 
 
                 sendToAll(botInstance, messageToSend, SubscriptionService.getAllSubscriptions())
+                IntervalService.setLastCheckTime(Instant.now())
             } catch (e: Exception) {
                 println("Critical Error in handleActivitiesNews: ${e.message}")
             }

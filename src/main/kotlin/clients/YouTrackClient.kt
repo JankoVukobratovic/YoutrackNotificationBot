@@ -31,8 +31,8 @@ class YouTrackClient(config: AppConfig) {
      * Gets a list of activities in the last 24 hours for the defined project.
      * @return A list of YouTrackActivity objects, or an empty list if an error occurs.
      */
-    suspend fun getActivities(sinceWhen: String = "1d"): List<YouTrackActivity> {
-        val youTrackQuery = "project: $projectShortName after: {minus ${sinceWhen}} .. *"
+    suspend fun getActivities(sinceWhenMillis: Long): List<YouTrackActivity> {
+        val youTrackQuery = "project: $projectShortName"
 
         val fields =
             "id,timestamp,category(id),target(idReadable,summary),author(login)," + "field(name),added(name,presentation),removed(name,presentation),text"
@@ -41,6 +41,7 @@ class YouTrackClient(config: AppConfig) {
         println("Sending request to $youTrackUrl/activities")
         println("query:\n$youTrackQuery")
         println("fields:\n$fields")
+        println("start: $sinceWhenMillis")
 
         val httpResponse = httpClient.get("$youTrackUrl/activities") {
             header("Authorization", "Bearer $youTrackToken")
@@ -48,6 +49,7 @@ class YouTrackClient(config: AppConfig) {
                 "categories",
                 "IssueCreatedCategory,IssueCommentCategory,IssueFieldChangeCategory,IssueAttachmentCategory"
             )
+            parameter("start", sinceWhenMillis)
             parameter("query", youTrackQuery)
             parameter("fields", fields)
             parameter("reverse", true)

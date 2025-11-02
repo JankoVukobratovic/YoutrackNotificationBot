@@ -1,11 +1,10 @@
-import com.github.kotlintelegrambot.bot
-import com.github.kotlintelegrambot.dispatch
-import com.github.kotlintelegrambot.logging.LogLevel
 import clients.TelegramBotClient
 import clients.YouTrackClient
 import config.ConfigurationLoader
 import repository.Repository
 import serializers.MessageFormatter
+import services.SchedulingService
+import kotlin.time.Duration.Companion.minutes
 
 fun main() {
     println("Starting YouTrack Telegram Bot")
@@ -24,8 +23,14 @@ fun main() {
     val youTrackClient = YouTrackClient(config)
 
 
-    val telegramBotClient = TelegramBotClient(youTrackClient, config,)
+    val telegramBotClient = TelegramBotClient(youTrackClient, config)
     telegramBotClient.startPolling()
+
+
+    SchedulingService.startScheduling(
+        handler = { telegramBotClient.handleActivitiesNews() },
+        checkInterval = config.selfConfig.updateIntervalMinutes.minutes
+    )
 
     println("Bot started. Listening for updates...")
 }
