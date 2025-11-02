@@ -1,10 +1,11 @@
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.logging.LogLevel
-import org.jankos.clients.TelegramBotClient
+import clients.TelegramBotClient
 import clients.YouTrackClient
 import config.ConfigurationLoader
-import manager.SubscriptionManager
+import repository.Repository
+import serializers.MessageFormatter
 
 fun main() {
     println("Starting YouTrack Telegram Bot")
@@ -16,21 +17,15 @@ fun main() {
         e.printStackTrace()
         return
     }
+    Repository.initialize(config)
 
-    SubscriptionManager.initialize(config)
+    MessageFormatter.initialize(config)
 
     val youTrackClient = YouTrackClient(config)
 
-    val youTrackBotLogic = TelegramBotClient(youTrackClient, config)
 
-    val bot = bot {
-        token = config.telegram.botToken
-        logLevel = LogLevel.Error
-        dispatch {
-            youTrackBotLogic.setupDispatchers(this)
-        }
-    }
-    bot.startPolling()
+    val telegramBotClient = TelegramBotClient(youTrackClient, config,)
+    telegramBotClient.startPolling()
 
     println("Bot started. Listening for updates...")
 }

@@ -12,7 +12,7 @@ data class AppConfig(
 
 @Serializable
 data class SelfConfig(
-    val subscriptionFile: String,
+    val saveFile: String,
     val updateIntervalMinutes: Int
 )
 

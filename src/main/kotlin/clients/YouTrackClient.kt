@@ -34,8 +34,8 @@ class YouTrackClient(config: AppConfig) {
     suspend fun getActivities(sinceWhen: String = "1d"): List<YouTrackActivity> {
         val youTrackQuery = "project: $projectShortName after: {minus ${sinceWhen}} .. *"
 
-        val fields = "id,timestamp,category(id),target(idReadable,summary),author(login)," +
-                "field(name),added(name,presentation),removed(name,presentation),text"
+        val fields =
+            "id,timestamp,category(id),target(idReadable,summary),author(login)," + "field(name),added(name,presentation),removed(name,presentation),text"
 
 
         println("Sending request to $youTrackUrl/activities")
@@ -44,10 +44,14 @@ class YouTrackClient(config: AppConfig) {
 
         val httpResponse = httpClient.get("$youTrackUrl/activities") {
             header("Authorization", "Bearer $youTrackToken")
-            parameter("categories", "IssueCreatedCategory,IssueCommentCategory,IssueFieldChangeCategory,IssueAttachmentCategory")
+            parameter(
+                "categories",
+                "IssueCreatedCategory,IssueCommentCategory,IssueFieldChangeCategory,IssueAttachmentCategory"
+            )
             parameter("query", youTrackQuery)
             parameter("fields", fields)
-            parameter("\$top", 20) // Retrieve up to 20 recent activities
+            parameter("reverse", true)
+            parameter("\$top", 10)
         }
 
         if (httpResponse.status == HttpStatusCode.OK) {
@@ -57,8 +61,7 @@ class YouTrackClient(config: AppConfig) {
         } else {
             val errorBody = httpResponse.bodyAsText()
             throw RuntimeException(
-                "YouTrack API Error (Status ${httpResponse.status.value}): " +
-                        "Response: $errorBody"
+                "YouTrack API Error (Status ${httpResponse.status.value}): " + "Response: $errorBody"
             )
         }
 
@@ -69,15 +72,12 @@ class YouTrackClient(config: AppConfig) {
      * @return A list of YouTrackIssue objects, or an empty list if an error occurs.
      */
     suspend fun getUpdatedIssues(updatePeriod: String = "1d"): List<YouTrackIssue> {
-
 //        val youTrackQuery = "project: $projectShortName updated: $updatePeriod .. now"
         val youTrackQuery = "updated: {minus $updatePeriod} .. *"
 
         val fields = "idReadable,summary,updated,customFields(name,value(name))"
 
         try {
-            // TODO Implement a method that only returns *NEW* notifications
-
             println("Sending request to $youTrackUrl/issues")
             println("query:\n$youTrackQuery")
             println("fields:\n$fields")
@@ -86,6 +86,7 @@ class YouTrackClient(config: AppConfig) {
                 header("Authorization", "Bearer $youTrackToken")
                 parameter("query", youTrackQuery)
                 parameter("fields", fields)
+                parameter("\$orderBy", "updated desc")
                 parameter("\$top", 10) // Limit to the top 10 updated issues
             }
 
@@ -99,9 +100,6 @@ class YouTrackClient(config: AppConfig) {
                     "YouTrack API Error (Status ${httpResponse.status.value}): " + "Response: $errorBody"
                 )
             }
-
-
-            // TODO IF ALL 10 are new, fetch more, repeat until no new notifications.
         } catch (e: Exception) {
             println("Error fetching issues from YouTrack: ${e.message}")
             return emptyList()

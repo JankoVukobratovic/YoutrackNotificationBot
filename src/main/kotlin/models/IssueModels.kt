@@ -21,5 +21,5 @@ data class CustomField(
 
 @Serializable
 data class CustomFieldValue(
-    val name: String
+    val name: String? = null
 )

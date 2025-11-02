@@ -1,31 +1,36 @@
-package org.jankos.clients
+package clients
 
+import com.github.kotlintelegrambot.Bot
+import com.github.kotlintelegrambot.bot
+import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCommand
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.ParseMode
+import com.github.kotlintelegrambot.logging.LogLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import clients.YouTrackClient
-import com.github.kotlintelegrambot.Bot
-import manager.SubscriptionManager
+import services.SubscriptionService
 import models.AppConfig
-import models.YouTrackActivity
-import models.YouTrackIssue
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.*
-import kotlin.collections.mapNotNull
+import serializers.MessageFormatter
+import services.IntervalService
 
 class TelegramBotClient(
     private val youTrackClient: YouTrackClient,
     config: AppConfig
 ) {
-    private val projectUrl = config.youtrack.baseUrl.removeSuffix("/api");
+
+    val botInstance: Bot = bot {
+        token = config.telegram.botToken
+        logLevel = LogLevel.Error
+
+        dispatch {
+            setupDispatchers(this)
+        }
+    }
+
     private val projectShortName = config.project.shortName
 
     fun setupDispatchers(dispatcher: Dispatcher) {
@@ -36,6 +41,10 @@ class TelegramBotClient(
         dispatcher.command("subscribe", handleSubscribeCommand())
         dispatcher.command("unsubscribe", handleUnsubscribeCommand())
         dispatcher.command("pingsubs", handlePingCommand())
+    }
+
+    fun startPolling() {
+        botInstance.startPolling()
     }
 
     private fun handleHelpCommand(): HandleCommand = {
@@ -53,11 +62,11 @@ class TelegramBotClient(
     private fun handlePingCommand(): HandleCommand = {
         val pingMessage = "🏓Ping pong!🏓 From: ${message.chat.title} \nWith id: ${message.chat.id}"
 
-        sendToAll(bot, pingMessage, SubscriptionManager.subscriptions)
+        sendToAll(bot, pingMessage, SubscriptionService.getAllSubscriptions())
     }
 
-    private fun sendToAll(bot: Bot, messageText: String, chatIds: Iterable<Long>){
-        for (id in chatIds){
+    private fun sendToAll(bot: Bot, messageText: String, chatIds: Iterable<Long>) {
+        for (id in chatIds) {
             bot.sendMessage(
                 chatId = ChatId.fromId(id),
                 text = messageText
@@ -66,7 +75,7 @@ class TelegramBotClient(
     }
 
     private fun handleSubscribeCommand(): HandleCommand = {
-        val messageText: String = if (SubscriptionManager.add(message.chat.id)) {
+        val messageText: String = if (SubscriptionService.add(message.chat.id)) {
             "✅Chat subscribed!"
         } else {
             "⁉️Already subscribed!"
@@ -78,7 +87,7 @@ class TelegramBotClient(
     }
 
     private fun handleUnsubscribeCommand(): HandleCommand = {
-        val messageText: String = if(SubscriptionManager.remove(message.chat.id)){
+        val messageText: String = if (SubscriptionService.remove(message.chat.id)) {
             "✅Chat removed from subscription list!"
         } else {
             "⁉️Chat wasn't even subscribed :/"
@@ -97,7 +106,6 @@ class TelegramBotClient(
         )
     }
 
-
     private fun handleActivitiesCommand(period: String = "1d"): HandleCommand = {
         CoroutineScope(Dispatchers.IO).launch {
             val chatId = ChatId.fromId(message.chat.id)
@@ -110,7 +118,7 @@ class TelegramBotClient(
 
             try {
                 val activities = youTrackClient.getActivities(period)
-                val responseMessage = formatActivityList(activities)
+                val responseMessage = MessageFormatter.formatActivityList(activities)
 
                 bot.sendMessage(
                     chatId = chatId,
@@ -128,82 +136,6 @@ class TelegramBotClient(
         }
     }
 
-    private fun formatActivityList(activities: List<YouTrackActivity>): String {
-        if (activities.isEmpty()) {
-            return "✅ No new activities found for the project `${projectShortName}` in the requested period."
-        }
-
-        val notifications = activities.mapNotNull { activity: YouTrackActivity ->
-            val issueLink =
-                "[${activity.target.idReadable}]($projectUrl)}/issue/${activity.target.idReadable})"
-            val author = activity.author.login
-            val timestamp = formatTimestamp(activity.timestamp)
-            val summary = activity.target.summary?.take(60) ?: "No summary"
-
-            val notificationText = when (activity.category.id) {
-                "IssueCreatedCategory" -> {
-                    "*${author}* created issue ${issueLink}: \n_${summary}_"
-                }
-
-                "IssueCommentCategory" -> {
-                    val commentText = activity.text?.take(80)?.replace("\n", " ") ?: ""
-                    "*${author}* commented on ${issueLink}: \n_\"${commentText}\"_..."
-                }
-
-                "IssueAttachmentCategory" -> {
-                    "*${author}* added an attachment to ${issueLink}"
-                }
-
-                "IssueFieldChangeCategory" -> {
-                    val fieldName = activity.field?.name ?: "a field"
-                    val addedValue = activity.added?.firstOrNull()?.name ?: activity.added?.firstOrNull()?.presentation
-                    val removedValue =
-                        activity.removed?.firstOrNull()?.name ?: activity.removed?.firstOrNull()?.presentation
-
-                    when {
-                        addedValue != null && removedValue != null -> {
-                            "*${author}* changed *${fieldName}* on ${issueLink} \nfrom *${removedValue}* to *${addedValue}*."
-                        }
-
-                        addedValue != null && removedValue == null -> {
-                            "*${author}* added *${addedValue}* to *${fieldName}* on ${issueLink}."
-                        }
-
-                        addedValue == null && removedValue != null -> {
-                            "*${author}* removed *${removedValue}* from *${fieldName}* on ${issueLink}."
-                        }
-
-                        else -> "*${author}* updated ${issueLink}."
-                    }
-                }
-
-                else -> null // Ignore others
-            }
-
-            if (notificationText != null) {
-                "[$timestamp] $notificationText"
-            } else {
-                null
-            }
-        }.joinToString(separator = "\n\n\n")
-
-        return if (notifications.isNotEmpty()) {
-            "📢 *Recent Activities for ${projectShortName}*:\n\n$notifications"
-        } else {
-            "✅ No significant activities found for the project `${projectShortName}` in the requested period."
-        }
-    }
-
-    private fun formatTimestamp(timestamp: Long): String {
-        val instant = Instant.ofEpochMilli(timestamp)
-        // timezone-aware
-        val formatter = DateTimeFormatter.ofPattern("MMM d, HH:mm:ss")
-            .withLocale(Locale.getDefault())
-            .withZone(ZoneId.systemDefault())
-
-        return formatter.format(instant)
-    }
-
     private fun handleIssuesCommand(): HandleCommand = {
         CoroutineScope(Dispatchers.IO).launch { //we love co-routines don't we? (internalized traumas from the parallel programming course are waking up)
             val chatId = ChatId.fromId(message.chat.id)
@@ -211,38 +143,22 @@ class TelegramBotClient(
 
             val issues = youTrackClient.getUpdatedIssues("1d")
 
-            val responseMessage = formatIssueList(issues)
+            val responseMessage = MessageFormatter.formatIssueList(issues)
             bot.sendMessage(chatId = chatId, text = responseMessage, parseMode = ParseMode.MARKDOWN)
         }
     }
 
-    private fun formatIssueList(issues: List<YouTrackIssue>): String {
-        if (issues.isEmpty()) {
-            return "✅ No issues updated in the period for project $projectShortName."
+    public fun handleActivitiesNews() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val activities = youTrackClient.getActivities(IntervalService.getSinceLastAsString())
+                val messageToSend = MessageFormatter.formatActivityList(activities)
+
+
+                sendToAll(botInstance, messageToSend, SubscriptionService.getAllSubscriptions())
+            } catch (e: Exception) {
+                println("Critical Error in handleActivitiesNews: ${e.message}")
+            }
         }
-
-        val sb = StringBuilder("📢 **Latest Updates for $projectShortName**:\n\n")  //funny emojies
-
-        val timeFormatter = DateTimeFormatter
-            .ofLocalizedDateTime(FormatStyle.MEDIUM)
-            .withLocale(Locale.getDefault())
-            .withZone(ZoneId.systemDefault())
-
-        for (issue in issues) {
-            val stateField = issue.customFields.firstOrNull { it.name == "State" }
-
-            val status = stateField?.value?.firstOrNull()?.name ?: "Unassigned"
-
-            val updatedTime = issue.updated.let {
-                timeFormatter.format(Instant.ofEpochMilli(it))
-            } ?: "N/A"
-
-            sb.append("**[${issue.idReadable}]** - ${issue.summary}\n")
-                .append("Status: `$status` | Last Update: `$updatedTime`\n")
-                .append("---\n")
-        }
-
-        return sb.toString()
     }
-
 }

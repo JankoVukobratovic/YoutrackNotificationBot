@@ -47,3 +47,4 @@ bin/
 ### Project files ###
 /src/main/resources/config.json
 /src/main/resources/new.json
+/save.json

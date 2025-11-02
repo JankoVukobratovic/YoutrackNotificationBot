@@ -11,7 +11,7 @@
     "shortName": "TEST"
   },
   "selfConfig": {
-    "subscriptionFile" : "savefile path",
+    "saveFile" : "savefile path",
     "updateIntervalMinutes": 5
   }
 }
