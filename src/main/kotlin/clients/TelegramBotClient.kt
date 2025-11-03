@@ -20,8 +20,7 @@ import java.time.Duration
 import java.time.Instant
 
 class TelegramBotClient(
-    private val youTrackClient: YouTrackClient,
-    config: AppConfig
+    private val youTrackClient: YouTrackClient, config: AppConfig
 ) {
 
     val botInstance: Bot = bot {
@@ -43,20 +42,74 @@ class TelegramBotClient(
         dispatcher.command("subscribe", handleSubscribeCommand())
         dispatcher.command("unsubscribe", handleUnsubscribeCommand())
         dispatcher.command("pingsubs", handlePingCommand())
+        dispatcher.command("newissue", handleNewIssueCommand())
     }
 
     fun startPolling() {
         botInstance.startPolling()
     }
 
+
+    private fun handleNewIssueCommand(): HandleCommand = {
+        CoroutineScope(Dispatchers.IO).launch {
+            val chatId = ChatId.fromId(message.chat.id)
+
+            val summary = message.text?.removePrefix("/newissue")?.trim() ?: ""
+
+            if (summary.isBlank()) {
+                bot.sendMessage(
+                    chatId = chatId,
+                    text = "⚠️ Please provide a **summary** for the new issue.\n\nUsage: `/newissue <issue summary>",
+                    parseMode = ParseMode.MARKDOWN
+                )
+                return@launch
+            }
+            bot.sendMessage(
+                chatId = chatId,
+                text = "⏳ Creating new issue in project *$projectShortName* with summary: `$summary`...",
+                parseMode = ParseMode.MARKDOWN
+            )
+            try {
+                val newIssueIdReadable =
+                    youTrackClient.createIssue(summary, "Reported from Telegram by ${message.from?.firstName}")
+                val issueUrl = "${youTrackClient.youTrackUrl.removeSuffix("/api")}/issue/$newIssueIdReadable"
+
+                val responseMessage = """
+                    ✅ **Issue Created!**
+                    
+                    *Summary:* $summary
+                    *ID:* [$newIssueIdReadable]($issueUrl)
+                    
+                    YouTrack URL: $issueUrl
+                """.trimIndent()
+
+
+                bot.sendMessage(
+                    chatId = chatId,
+                    text = responseMessage,
+                    parseMode = ParseMode.MARKDOWN
+                )
+
+
+            } catch (e: Exception) {
+                System.err.println("Error creating issue: ${e.message}")
+                bot.sendMessage(
+                    chatId = chatId,
+                    text = "🚨 **Failed to Create Issue** 🚨\nAn internal error occurred. Check logs for details.",
+                    parseMode = ParseMode.MARKDOWN
+                )
+            }
+        }
+    }
+
     private fun handleHelpCommand(): HandleCommand = {
         bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = """/start - A welcome message
+            chatId = ChatId.fromId(message.chat.id), text = """/start - A welcome message
                     /issues - Last 24 hours of issues activity
                     /activities - Notifications from the last 24 hours
                     /subscribe - Subscribe this chat to receive regular notifications
-                    /unsubscribe - Unsubscribe this chat from regular notifications"""
+                    /unsubscribe - Unsubscribe this chat from regular notifications
+                    /newissue <summary> - Posts a new issue to the YouTrack project instance"""
         )
     }
 
@@ -67,7 +120,8 @@ class TelegramBotClient(
         sendToAll(botInstance, pingMessage, SubscriptionService.getAllSubscriptions())
     }
 
-    fun pingAll(){
+    @Suppress("unused")
+    fun pingAll() {
         val pingMessage = "🏓Ping pong!🏓 \nFrom scheduler!"
         sendToAll(botInstance, pingMessage, SubscriptionService.getAllSubscriptions())
 
@@ -76,8 +130,7 @@ class TelegramBotClient(
     private fun sendToAll(bot: Bot, messageText: String, chatIds: Iterable<Long>) {
         for (id in chatIds) {
             bot.sendMessage(
-                chatId = ChatId.fromId(id),
-                text = messageText
+                chatId = ChatId.fromId(id), text = messageText
             )
         }
     }
@@ -89,8 +142,7 @@ class TelegramBotClient(
             "⁉️Already subscribed!"
         }
         bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = messageText
+            chatId = ChatId.fromId(message.chat.id), text = messageText
         )
     }
 
@@ -101,16 +153,14 @@ class TelegramBotClient(
             "⁉️Chat wasn't even subscribed :/"
         }
         bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = messageText
+            chatId = ChatId.fromId(message.chat.id), text = messageText
         )
     }
 
     private fun handleStartCommand(): HandleCommand = {
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
-            text = "Hello! I track YouTrack issues for $projectShortName. " +
-                    "Try /help for a list of commands."
+            text = "Hello! I track YouTrack issues for $projectShortName. " + "Try /help for a list of commands."
         )
     }
 
@@ -129,15 +179,12 @@ class TelegramBotClient(
                 val responseMessage = MessageFormatter.formatActivityList(activities)
 
                 bot.sendMessage(
-                    chatId = chatId,
-                    text = responseMessage,
-                    parseMode = ParseMode.MARKDOWN
+                    chatId = chatId, text = responseMessage, parseMode = ParseMode.MARKDOWN
                 )
             } catch (e: Exception) {
                 println("Critical Error in bot command: ${e.message}")
                 bot.sendMessage(
-                    chatId = chatId,
-                    text = "🚨 **Internal Error Occurred** 🚨\n", //these emojis are so funny.
+                    chatId = chatId, text = "🚨 **Internal Error Occurred** 🚨\n", //these emojis are so funny.
                     parseMode = ParseMode.MARKDOWN
                 )
             }
@@ -160,7 +207,7 @@ class TelegramBotClient(
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val activities = youTrackClient.getActivities(IntervalService.getLastCheckTime().toEpochMilli())
-                if(activities.isEmpty()){
+                if (activities.isEmpty()) {
                     println("no new activities")
                     return@launch
                 }

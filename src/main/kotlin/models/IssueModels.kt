@@ -2,6 +2,18 @@ package models
 
 import kotlinx.serialization.Serializable
 import serializers.YouTrackValueAsListSerializer
+@Serializable
+data class YouTrackProject(
+    val id: String
+)
+@Serializable
+data class NewYouTrackIssue(
+    val summary: String,
+    val description: String?,
+    val project: YouTrackProject
+)
+
+
 
 
 @Serializable

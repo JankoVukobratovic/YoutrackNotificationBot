@@ -22,10 +22,8 @@ fun main() {
 
     val youTrackClient = YouTrackClient(config)
 
-
     val telegramBotClient = TelegramBotClient(youTrackClient, config)
     telegramBotClient.startPolling()
-
 
     SchedulingService.startScheduling(
         handler = { telegramBotClient.handleActivitiesNews() },

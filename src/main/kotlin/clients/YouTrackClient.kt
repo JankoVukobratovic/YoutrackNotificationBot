@@ -5,16 +5,16 @@ import io.ktor.client.call.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.json.Json
-import models.AppConfig
-import models.YouTrackActivity
-import models.YouTrackIssue
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.*
+import models.*
 
 class YouTrackClient(config: AppConfig) {
 
-    private val youTrackUrl = config.youtrack.baseUrl
+    val youTrackUrl = config.youtrack.baseUrl
+    private val projectId: String
     private val youTrackToken = config.youtrack.apiToken
     private val projectShortName = config.project.shortName
 
@@ -25,6 +25,43 @@ class YouTrackClient(config: AppConfig) {
                 isLenient = true
             })
         }
+    }
+
+    init {
+        projectId = runBlocking {
+            getProjectInternalId(projectShortName)
+        }
+        println("YouTrackClient initialized. Project ID for $projectShortName: $projectId")
+    }
+
+    private suspend fun getProjectInternalId(shortName: String): String {
+        println("Fetching internal project ID for short name: $shortName...")
+        val fields = "id,shortName"
+
+        val httpResponse = httpClient.get("$youTrackUrl/admin/projects") {
+            header("Authorization", "Bearer $youTrackToken")
+            parameter("fields", fields)
+        }
+
+        if (!httpResponse.status.isSuccess()) {
+            println("Fatal: Failed obtaining projectId, http code: ${httpResponse.status.value}")
+            throw RuntimeException(
+                "YouTrack API Error (Status ${httpResponse.status.value}): " + "Response: ${httpResponse.bodyAsText()}"
+            )
+        }
+
+        val jsonString = httpResponse.body<String>()
+        val projectsArray = Json.parseToJsonElement(jsonString).jsonArray
+
+        val projectElement = projectsArray.find {
+            it.jsonObject["shortName"]?.jsonPrimitive?.content == shortName
+        }
+
+        val projectId = projectElement?.jsonObject?.get("id")?.jsonPrimitive?.content
+
+        return projectId ?: throw IllegalStateException(
+            "FATAL: Could not find YouTrack project with short name '$shortName'."
+        )
     }
 
     /**
@@ -108,4 +145,28 @@ class YouTrackClient(config: AppConfig) {
         }
     }
 
+    /**
+     * posts an issue to the YouTrack instance
+     */
+    suspend fun createIssue(summary: String, description: String): String {
+        val issuePayload = NewYouTrackIssue(
+            summary = summary,
+            description = description,
+            project = YouTrackProject(id = projectId)
+        )
+
+        val httpResponse = httpClient.post("$youTrackUrl/issues") {
+            header("Authorization", "Bearer $youTrackToken")
+            contentType(ContentType.Application.Json)
+
+            // Set the body using the serializable data class
+            setBody(issuePayload)
+
+            // Request minimal fields for confirmation response
+            parameter("fields", "idReadable,summary")
+        }
+        val jsonObject = Json.parseToJsonElement(httpResponse.body<String>()).jsonObject
+        return jsonObject["idReadable"]?.jsonPrimitive?.content
+            ?: throw IllegalStateException("Failed to parse post response")
+    }
 }
