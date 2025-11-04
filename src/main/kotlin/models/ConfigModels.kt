@@ -13,7 +13,7 @@ data class AppConfig(
 @Serializable
 data class SelfConfig(
     val saveFile: String,
-    val updateIntervalMinutes: Int
+    val updateIntervalMinutes: Double
 )
 
 @Serializable

@@ -24,11 +24,11 @@ fun main() {
 
     val telegramBotClient = TelegramBotClient(youTrackClient, config)
     telegramBotClient.startPolling()
+    println("Bot started. Listening for updates...")
 
     SchedulingService.startScheduling(
         handler = { telegramBotClient.handleActivitiesNews() },
         checkInterval = config.selfConfig.updateIntervalMinutes.minutes
     )
 
-    println("Bot started. Listening for updates...")
 }

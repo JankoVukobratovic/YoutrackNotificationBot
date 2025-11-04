@@ -25,7 +25,7 @@ object MessageFormatter {
 
         val notifications = activities.mapNotNull { activity: YouTrackActivity ->
             val issueLink =
-                "[${activity.target.idReadable}]($projectUrl)}/issue/${activity.target.idReadable})"
+                "[${activity.target.idReadable}]($projectUrl)/issue/${activity.target.idReadable})"
             val author = activity.author.login
             val timestamp = formatTimestamp(activity.timestamp)
             val summary = activity.target.summary?.take(60) ?: "No summary"

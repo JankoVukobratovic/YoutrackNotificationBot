@@ -76,10 +76,11 @@ class YouTrackClient(config: AppConfig) {
 
 
         println("Sending request to $youTrackUrl/activities")
-        println("query:\n$youTrackQuery")
-        println("fields:\n$fields")
-        println("start: $sinceWhenMillis")
-
+        /*
+                println("query:\n$youTrackQuery")
+                println("fields:\n$fields")
+                println("start: $sinceWhenMillis")
+        */
         val httpResponse = httpClient.get("$youTrackUrl/activities") {
             header("Authorization", "Bearer $youTrackToken")
             parameter(
@@ -116,39 +117,39 @@ class YouTrackClient(config: AppConfig) {
 
         val fields = "idReadable,summary,updated,customFields(name,value(name))"
 
-        try {
-            println("Sending request to $youTrackUrl/issues")
-            println("query:\n$youTrackQuery")
-            println("fields:\n$fields")
+        println("Sending request to $youTrackUrl/issues")
+        /*
+        println("query:\n$youTrackQuery")
+        println("fields:\n$fields")
+        */
 
-            val httpResponse = httpClient.get("$youTrackUrl/issues") {
-                header("Authorization", "Bearer $youTrackToken")
-                parameter("query", youTrackQuery)
-                parameter("fields", fields)
-                parameter("\$orderBy", "updated desc")
-                parameter("\$top", 10) // Limit to the top 10 updated issues
-            }
-
-            if (httpResponse.status == HttpStatusCode.OK) {
-                println("YouTrack request successful. Parsing issues...")
-                println(httpResponse.body<String>())
-                return httpResponse.body()
-            } else {
-                val errorBody = httpResponse.bodyAsText()
-                throw RuntimeException(
-                    "YouTrack API Error (Status ${httpResponse.status.value}): " + "Response: $errorBody"
-                )
-            }
-        } catch (e: Exception) {
-            println("Error fetching issues from YouTrack: ${e.message}")
-            return emptyList()
+        val httpResponse = httpClient.get("$youTrackUrl/issues") {
+            header("Authorization", "Bearer $youTrackToken")
+            parameter("query", youTrackQuery)
+            parameter("fields", fields)
+            parameter("\$orderBy", "updated desc")
+            parameter("\$top", 10) // Limit to the top 10 updated issues
         }
+
+        if (httpResponse.status == HttpStatusCode.OK) {
+            println("YouTrack request successful. Parsing issues...")
+            //   println(httpResponse.body<String>())
+            return httpResponse.body()
+        } else {
+            val errorBody = httpResponse.bodyAsText()
+            throw RuntimeException(
+                "YouTrack API Error (Status ${httpResponse.status.value}): " + "Response: $errorBody"
+            )
+        }
+
     }
 
     /**
      * posts an issue to the YouTrack instance
      */
     suspend fun createIssue(summary: String, description: String): String {
+        println("Posting new issue: $summary description: $description")
+
         val issuePayload = NewYouTrackIssue(
             summary = summary,
             description = description,
@@ -165,8 +166,16 @@ class YouTrackClient(config: AppConfig) {
             // Request minimal fields for confirmation response
             parameter("fields", "idReadable,summary")
         }
-        val jsonObject = Json.parseToJsonElement(httpResponse.body<String>()).jsonObject
-        return jsonObject["idReadable"]?.jsonPrimitive?.content
-            ?: throw IllegalStateException("Failed to parse post response")
+        if (httpResponse.status == HttpStatusCode.OK) {
+            println("YouTrack request successful. Parsing response...")
+            val jsonObject = Json.parseToJsonElement(httpResponse.body<String>()).jsonObject
+            return jsonObject["idReadable"]?.jsonPrimitive?.content
+                ?: throw IllegalStateException("Failed to parse post response")
+        } else {
+            val errorBody = httpResponse.bodyAsText()
+            throw RuntimeException(
+                "YouTrack API Error (Status ${httpResponse.status.value}): " + "Response: $errorBody"
+            )
+        }
     }
 }

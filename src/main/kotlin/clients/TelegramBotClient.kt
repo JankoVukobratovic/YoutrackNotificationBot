@@ -5,7 +5,9 @@ import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
+import com.github.kotlintelegrambot.dispatcher.handlers.ErrorHandler
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCommand
+import com.github.kotlintelegrambot.dispatcher.handlers.HandleError
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.logging.LogLevel
@@ -43,10 +45,15 @@ class TelegramBotClient(
         dispatcher.command("unsubscribe", handleUnsubscribeCommand())
         dispatcher.command("pingsubs", handlePingCommand())
         dispatcher.command("newissue", handleNewIssueCommand())
+        dispatcher.addErrorHandler(ErrorHandler(handleError()))
     }
 
     fun startPolling() {
         botInstance.startPolling()
+    }
+
+    private fun handleError(): HandleError = {
+        System.err.println("Dispatcher ran into an issue: ${error.getErrorMessage()}")
     }
 
 
@@ -69,12 +76,11 @@ class TelegramBotClient(
                 text = "⏳ Creating new issue in project *$projectShortName* with summary: `$summary`...",
                 parseMode = ParseMode.MARKDOWN
             )
-            try {
-                val newIssueIdReadable =
-                    youTrackClient.createIssue(summary, "Reported from Telegram by ${message.from?.firstName}")
-                val issueUrl = "${youTrackClient.youTrackUrl.removeSuffix("/api")}/issue/$newIssueIdReadable"
+            val newIssueIdReadable =
+                youTrackClient.createIssue(summary, "Reported from Telegram by ${message.from?.firstName}")
+            val issueUrl = "${youTrackClient.youTrackUrl.removeSuffix("/api")}/issue/$newIssueIdReadable"
 
-                val responseMessage = """
+            val responseMessage = """
                     ✅ **Issue Created!**
                     
                     *Summary:* $summary
@@ -84,21 +90,9 @@ class TelegramBotClient(
                 """.trimIndent()
 
 
-                bot.sendMessage(
-                    chatId = chatId,
-                    text = responseMessage,
-                    parseMode = ParseMode.MARKDOWN
-                )
-
-
-            } catch (e: Exception) {
-                System.err.println("Error creating issue: ${e.message}")
-                bot.sendMessage(
-                    chatId = chatId,
-                    text = "🚨 **Failed to Create Issue** 🚨\nAn internal error occurred. Check logs for details.",
-                    parseMode = ParseMode.MARKDOWN
-                )
-            }
+            bot.sendMessage(
+                chatId = chatId, text = responseMessage, parseMode = ParseMode.MARKDOWN
+            )
         }
     }
 
@@ -130,7 +124,7 @@ class TelegramBotClient(
     private fun sendToAll(bot: Bot, messageText: String, chatIds: Iterable<Long>) {
         for (id in chatIds) {
             bot.sendMessage(
-                chatId = ChatId.fromId(id), text = messageText
+                chatId = ChatId.fromId(id), text = messageText, parseMode = ParseMode.MARKDOWN
             )
         }
     }
@@ -160,7 +154,7 @@ class TelegramBotClient(
     private fun handleStartCommand(): HandleCommand = {
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
-            text = "Hello! I track YouTrack issues for $projectShortName. " + "Try /help for a list of commands."
+            text = "Hello! I track YouTrack issues for $projectShortName. Try /help for a list of commands."
         )
     }
 
@@ -174,20 +168,13 @@ class TelegramBotClient(
                 parseMode = ParseMode.MARKDOWN
             )
 
-            try {
-                val activities = youTrackClient.getActivities(Instant.now().toEpochMilli() - period.toMillis())
-                val responseMessage = MessageFormatter.formatActivityList(activities)
+            val activities = youTrackClient.getActivities(Instant.now().toEpochMilli() - period.toMillis())
+            val responseMessage = MessageFormatter.formatActivityList(activities)
 
-                bot.sendMessage(
-                    chatId = chatId, text = responseMessage, parseMode = ParseMode.MARKDOWN
-                )
-            } catch (e: Exception) {
-                println("Critical Error in bot command: ${e.message}")
-                bot.sendMessage(
-                    chatId = chatId, text = "🚨 **Internal Error Occurred** 🚨\n", //these emojis are so funny.
-                    parseMode = ParseMode.MARKDOWN
-                )
-            }
+            bot.sendMessage(
+                chatId = chatId, text = responseMessage, parseMode = ParseMode.MARKDOWN
+            )
+
         }
     }
 
@@ -205,20 +192,22 @@ class TelegramBotClient(
 
     fun handleActivitiesNews() {
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val activities = youTrackClient.getActivities(IntervalService.getLastCheckTime().toEpochMilli())
-                if (activities.isEmpty()) {
-                    println("no new activities")
-                    return@launch
-                }
-                val messageToSend = MessageFormatter.formatActivityList(activities)
-
-
-                sendToAll(botInstance, messageToSend, SubscriptionService.getAllSubscriptions())
-                IntervalService.setLastCheckTime(Instant.now())
-            } catch (e: Exception) {
-                println("Critical Error in handleActivitiesNews: ${e.message}")
+            if(SubscriptionService.getAllSubscriptions().isEmpty()){
+                println("No subscribers to the newsletter, skipping...")
+                return@launch
             }
+
+            val activities = youTrackClient.getActivities(IntervalService.getLastCheckTime().toEpochMilli())
+            if (activities.isEmpty()) {
+                println("no new activities")
+                return@launch
+            }
+            val messageToSend = MessageFormatter.formatActivityList(activities)
+
+
+            sendToAll(botInstance, messageToSend, SubscriptionService.getAllSubscriptions())
+            IntervalService.setLastCheckTime(Instant.now())
+
         }
     }
 }

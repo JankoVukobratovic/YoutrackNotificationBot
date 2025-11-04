@@ -7,7 +7,7 @@ group = "org.jankos"
 version = "1.0-SNAPSHOT"
 
 val telegramBotVersion = "6.1.0"
-val ktorVersion = "2.3.6"
+val ktorVersion = "3.0.0"
 val coroutinesVersion = "1.7.3"
 
 repositories {
@@ -25,6 +25,7 @@ dependencies {
 
     implementation("io.ktor:ktor-client-core:$ktorVersion")
     implementation("io.ktor:ktor-client-cio:$ktorVersion")
+    implementation("org.slf4j:slf4j-simple:2.0.13")
 
     implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
