@@ -19,8 +19,6 @@ and the **Kotlin Telegram Bot Library**.
 * **Configuration:** Reads all API keys, tokens, project names, and scheduling 
 * intervals from `config.json`.
 
-## 🛠️ Setup and Installation
-
 ## Commands
 * `/newissue <summary>`: Creates a new issue with provided summary. 
 The description contains the Telegram username of the caller
@@ -30,6 +28,8 @@ The description contains the Telegram username of the caller
 * `/pingsubs`: Debugging command to send a "ping" message to all current subscribers
 * `/help`: List of commands
 * `/start`: Introduction message
+
+## 🛠️ Setup and Installation
 
 ### Prerequisites
 
